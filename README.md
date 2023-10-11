@@ -40,23 +40,24 @@ const encrypt = async (data: string, publicKeyPem: string) => {
   const publicKey = forge.pki.publicKeyFromPem(publicKeyPem)
   const encryptedAesKey = publicKey.encrypt(aesKey, 'RSA-OAEP')
 
-  return {
+  const encryptedMessageBytes = {
     encryptedMessage: forge.util.encode64(encryptedMessage.getBytes()),
     iv: forge.util.encode64(iv),
     tag: forge.util.encode64(tag),
     encryptedAesKey: forge.util.encode64(encryptedAesKey),
   }
+
+  const combinedString = [
+    encryptedMessageBytes.encryptedAesKey,
+    encryptedMessageBytes.iv,
+    encryptedMessageBytes.tag,
+    encryptedMessageBytes.encryptedMessage,
+  ].join(',')
+
+  return encodeURIComponent(combinedString)
 }
 
-const decrypt = async (
-  encryptedData: {
-    encryptedAesKey: string
-    iv: string
-    tag: any
-    encryptedMessage: string
-  },
-  privateKeyPem: string
-) => {
+const decrypt = async (encryptedToken: string, privateKeyPem: string) => {
   // const privateKey = forge.pki.privateKeyFromPem(privateKeyPem)
   // const decrypted = privateKey.decrypt(
   //   forge.util.decode64(encryptedData),
@@ -64,15 +65,35 @@ const decrypt = async (
   // )
   // return forge.util.decodeUtf8(decrypted)
 
+  const [
+    encryptedAesKeySplitted,
+    ivSplitted,
+    tagSplitted,
+    encryptedMessageSplitted,
+  ] = encryptedToken.split(',')
+
+  const encryptedData = {
+    encryptedMessageSplitted,
+    ivSplitted,
+    tagSplitted,
+    encryptedAesKeySplitted,
+  }
+
   const privateKey = forge.pki.privateKeyFromPem(privateKeyPem)
 
-  const encryptedAesKey = forge.util.decode64(encryptedData.encryptedAesKey)
+  const encryptedAesKey = forge.util.decode64(
+    encryptedData.encryptedAesKeySplitted
+  )
   const aesKey = privateKey.decrypt(encryptedAesKey, 'RSA-OAEP')
 
-  const iv = forge.util.createBuffer(forge.util.decode64(encryptedData.iv))
-  const tag = forge.util.createBuffer(forge.util.decode64(encryptedData.tag))
+  const iv = forge.util.createBuffer(
+    forge.util.decode64(encryptedData.ivSplitted)
+  )
+  const tag = forge.util.createBuffer(
+    forge.util.decode64(encryptedData.tagSplitted)
+  )
   const encryptedMessage = forge.util.createBuffer(
-    forge.util.decode64(encryptedData.encryptedMessage)
+    forge.util.decode64(encryptedData.encryptedMessageSplitted)
   )
 
   const decipher = forge.cipher.createDecipher('AES-GCM', aesKey)
@@ -90,5 +111,6 @@ const decrypt = async (
 }
 
 export { generateKeyPairAsync, encrypt, decrypt }
+
 
 ```
